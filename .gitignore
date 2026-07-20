@@ -1,0 +1,4 @@
+cdp-tests/obj_dir/
+cdp-tests/waveform/
+cdp-tests/meminit.bin
+cdp-tests/__pycache__/
