@@ -1,6 +1,8 @@
 /* verilator lint_off UNUSEDSIGNAL */
 // signal not use
 `include "para.sv"
+// 写回级是整条数据通路的最终收束点。
+// 无论结果源头是 ALU、访存、跳转返回地址还是 CSR 读值，都会在这里统一选择成 rd_value_next。
 module WBU (
     input clock,
     input reset,
@@ -41,6 +43,7 @@ module WBU (
   logic [31:0] pc_reg;
   logic        valid_reg;
 
+  // 先把来自 LSU 末拍的所有候选结果锁存住，确保最终提交时序稳定。
   always_ff @(posedge clock) begin
     if (reset) begin
         MEM_Rdata_reg <= 0;
@@ -110,6 +113,10 @@ module WBU (
     endcase
   end
 
+  // 最终写回选择优先级：
+  // jump/CSR 使用提前准备好的 rd_value_reg；
+  // load 使用访存返回值；
+  // 其余普通算术逻辑指令使用 Ex_result_reg。
   logic wb_sel_jmp_csr;
   assign wb_sel_jmp_csr = jump_flag_reg | (|csr_wen_reg);
   assign rd_value_next = wb_sel_jmp_csr ? rd_value_reg : (mem_ren_reg ? rdata_wb : Ex_result_reg);

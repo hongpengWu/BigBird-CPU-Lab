@@ -1,5 +1,8 @@
 `timescale 1ns / 1ps
 
+// 教学注释: LSU 负责把 EXU 产生的地址与访存控制映射到外设总线，同时完成 load 数据扩展。
+// 从教学角度看，LSU 也是 EX/MEM 级间寄存器: 地址、rd、csr_wen、jump_flag 等都会在这里锁存一拍。
+// v5 中访存与写回选择混在一起；v6/v7 则把“发起访存”和“选择写回值”明确拆到了 LSU/WBU 两级。
 module LSU (
     input clock,
     input reset,
@@ -59,6 +62,7 @@ module LSU (
     logic jump_flag_reg;
     logic valid_last_reg;
 
+    // LSU 把 EXU 的有效位再延后一拍，对应 EX/MEM -> MEM/WB 之间的流动。
     always @(posedge clock) begin
         if (reset) valid_next <= 1'b0;
         else valid_next <= valid_last;
@@ -96,11 +100,13 @@ module LSU (
     end
 
     assign ready_last = ready_next;
+    // 对外总线地址来自 EXU 计算出的有效地址。
     assign addr = Ex_result_reg;
     assign wdata = rs2_value_reg;
     assign LSU_Rdata = rdata_ex;
     assign wen = mem_wen_reg;
 
+    // store/load 的字节宽度直接复用 funct3 低两位。
     assign mask = funct3_reg[1:0];
 
     assign Ex_result_next = Ex_result_reg;
@@ -112,6 +118,7 @@ module LSU (
     assign jump_flag_next = jump_flag_reg;
     assign csr_wen_next = csr_wen_reg;
 
+    // load 指令在这里完成字节/半字的符号或零扩展。
     always @(*) begin
         case (funct3_reg)
             3'b000: rdata_ex = rdata_8i;  // lb

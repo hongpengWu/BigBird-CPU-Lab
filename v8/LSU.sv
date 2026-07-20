@@ -2,6 +2,8 @@
 
 `timescale 1ns / 1ps
 
+// 访存级除了产生总线访问信号，还显式保留了多拍流水寄存器，
+// 这样前递网络可以分别观察到“刚进入访存”“访存中间拍”“即将写回”三个阶段的结果。
 module LSU (
     input clock,
     input reset,
@@ -122,6 +124,7 @@ module LSU (
   assign ready_last = ready_next;
   assign valid_next = valid_reg;
 
+  // 外设地址在这里做字对齐，mask/funct3 决定最终按字节、半字还是整字访问。
   assign addr  = {Ex_result_addr_reg_pipe[31:18], 2'b00, Ex_result_addr_reg_pipe[15:0]};
   assign wdata = rs2_value_reg_pipe;
   assign mask  = funct3_reg_pipe[1:0];
@@ -145,6 +148,8 @@ module LSU (
   assign R_wen_pipe     = R_wen_reg_pipe;
   assign valid_pipe     = valid_reg_pipe;
 
+  // 对前递来说，跳转/CSR 与普通 ALU 指令不同：
+  // 它们真正想被下游看到的是 rd_value，而不是地址/ALU 原始结果。
   logic wb_sel_jmp_csr_pipe;
   assign wb_sel_jmp_csr_pipe = jump_flag_reg_pipe | (|csr_wen_reg_pipe);
   assign forward_val_pipe = wb_sel_jmp_csr_pipe ? rd_value_reg_pipe : Ex_result_fwd_reg_pipe;
@@ -165,6 +170,10 @@ module LSU (
   assign wb_sel_jmp_csr2 = jump_flag_reg2 | (|csr_wen_reg2);
   assign forward_val_wb = wb_sel_jmp_csr2 ? rd_value_reg2 : (mem_ren_reg2 ? rdata_wb2 : Ex_result_fwd_reg2);
 
+  // 三级寄存串联体现了访存路径的时间展开：
+  // reg   : EXU 刚送入 LSU 的拍
+  // pipe  : 对外发总线、同时可作为中间前递观察点
+  // reg2  : 接近写回的最终访存结果
   always_ff @(posedge clock) begin
     if (reset) begin
       mem_ren_reg   <= 1'b0;
@@ -249,6 +258,7 @@ module LSU (
     end
   end
 
+  // 当前拍读数据扩展，供 LSU 本级使用与早期观察。
   always @(*) begin
     case (funct3_reg)
       3'b000:  rdata_ex = rdata_8i;
@@ -300,6 +310,7 @@ module LSU (
       .sext_data(rdata_16i2)
   );
 
+  // 写回前再次按 funct3 整理数据宽度，形成最终提交给 WBU 的 load 结果。
   always @(*) begin
     case (funct3_reg2)
       3'b000:  rdata_wb2 = rdata_8i2;

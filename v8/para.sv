@@ -1,5 +1,7 @@
 /*interface define*/
 
+// 这份参数表把 v8 用到的主要指令族和 ALU 编码集中起来，
+// 让译码级和执行级通过统一宏约定协作。
 
 // __opcode__
 
@@ -14,7 +16,7 @@
 `define J_opcode  7'b1101111                          //jal
 `define M_opcode  7'b1110011
 
-// alu
+// alu: 这些编码最终会在 IDU 中被选出，在 EXU/ALU 中解释执行。
 `define alu_add                   4'b0000
 `define alu_sub                   4'b0001
 `define alu_or                    4'b0010

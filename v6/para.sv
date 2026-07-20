@@ -1,5 +1,8 @@
 
+// 教学注释: para.sv 统一定义指令 opcode 与 ALU 操作码，供各流水级共享。
+// 模块拆分后，公共宏定义比 v5 更重要，因为译码级和执行级需要对同一套编码保持一致理解。
 // __opcode__
+// 这些宏在 IFU/IDU/EXU/WBU 之间共享，避免不同模块对同一指令使用不同编码。
 
 `define R_opcode  7'b0110011
 `define I0_opcode 7'b0000011                          //lw

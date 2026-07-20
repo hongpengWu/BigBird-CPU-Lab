@@ -1,5 +1,7 @@
 `include "para.sv"
 
+// 教学说明：v4 在 v3 的 ALU/分支骨架上，正式接入 load/store 数据通路。
+// 因此阅读这一版时，可以重点观察“ALU 先算地址，再由 MEM 阶段决定读写方式”的流程。
 module myCPU (
     input cpu_clk,
     input cpu_rst,
@@ -25,6 +27,8 @@ module myCPU (
   // ==================== IF: Program Counter ====================
   logic [31:0] pc;
 
+  // 教学说明：取指后先把指令拆成 opcode / funct / 寄存器编号 / 立即数。
+  // 后面的所有控制选择，本质上都围绕这些字段展开。
   // ==================== IF/ID: Instruction Fields ==============
   wire [31:0] inst = irom_data;
   wire [31:0] snpc = pc + 32'd4;
@@ -42,7 +46,10 @@ module myCPU (
   wire [31:0] imm_u = {inst[31:12], 12'b0};
   wire [31:0] imm_j = {{11{inst[31]}}, inst[31], inst[19:12], inst[20], inst[30:21], 1'b0};
 
+  // 译码阶段把“指令长什么样”转换成“数据通路该怎么走”。
+  // 对比 v3/v4/v5 这里哪些布尔量被打开，能最快看出版本能力的递进。
   // ==================== ID: Decode Result ======================
+  // v4 打开 load/store 后，ALU 结果开始承担“数据存储器地址”的角色。
   wire is_load   = (opcode == `I0_opcode);
   wire is_op_imm = (opcode == `I1_opcode);
   wire is_jalr   = 1'b0;
@@ -75,6 +82,8 @@ module myCPU (
   logic [31:0] rd_value_next;
   logic        branch_taken;
 
+  // v4 开始真正使用这些扩展结果：从外设/数据存储器读回较窄数据后，
+  // 需要根据指令类型做符号扩展或零扩展，才能写回寄存器。
   // ==================== MEM: Load Extension ====================
   wire [31:0] load_i8;
   wire [31:0] load_i16;
@@ -120,6 +129,8 @@ module myCPU (
       .res(alu_res)
   );
 
+  // 分支判断使用寄存器读出的两个源操作数，决定控制流是否偏离顺序执行。
+  // 这是从纯算术走向“会转弯的 CPU”的第一步。
   // ==================== EX: Branch Decision ====================
   always_comb begin
     branch_taken = 1'b0;
@@ -134,6 +145,8 @@ module myCPU (
     endcase
   end
 
+  // 这一段是教学重点：同一个 ALU，根据不同指令切换输入源和操作类型。
+  // 算术指令在这里选寄存器/立即数，访存指令在这里算地址，跳转指令也在这里准备目标。
   // ==================== EX: ALU Input Select ===================
   always_comb begin
     alu_in1 = rs1_value;
@@ -205,6 +218,8 @@ module myCPU (
     end
   end
 
+  // v4 的教学重点在这里最明显：
+  // ALU 只负责算出地址，真正的读写掩码、写数据选择和写回内容都在本段完成。
   // ==================== MEM/WB: Commit Select ==================
   always_comb begin
     perip_addr = 32'd0;
@@ -263,6 +278,8 @@ module myCPU (
   assign rf_wdata = rd_value_next;
   assign irom_addr = pc;
 
+  // 时钟到来后提交当前指令的最终可见结果，并把调试端口同步出去。
+  // 从教学角度看，这里可以视为“本条指令正式生效”的时刻。
   // ==================== WB: Architectural Commit ===============
   always_ff @(posedge cpu_clk) begin
     if (cpu_rst) begin

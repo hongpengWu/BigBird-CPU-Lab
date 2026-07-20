@@ -1,3 +1,5 @@
+// 共享加法器。
+// 通过 choose_add_sub 选择 add_2 或其按位取反加 1，实现加/减统一。
 module add
 #(
     parameter BW=4

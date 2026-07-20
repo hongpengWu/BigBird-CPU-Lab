@@ -161,7 +161,8 @@ sudo apt-get install -y verilator make g++ python3
 流水线骨架版。
 
 - 引入 IF/ID/EX/MEM/WB 阶段划分。
-- 重点展示结构拆分，不以完整性能优化为目标。
+- 教学重点是结构拆分，而不是完整性能优化。
+- 为保持后续验证链路连续，功能上已保留较完整的系统指令与 CSR 主路径。
 - 主要解决“单周期如何演化为流水线”这一问题。
 
 ### v7
@@ -169,14 +170,16 @@ sudo apt-get install -y verilator make g++ python3
 带冒险处理的流水线版。
 
 - 引入前递、暂停、冲刷等关键控制机制。
-- 让流水线从“结构存在”走向“行为正确”。
+- 在 `v6` 的系统指令/CSR 基础上，重点补齐数据冒险与控制冒险处理。
+- 让流水线从“结构存在”走向“行为更稳定、更接近真实可用”。
 - 适合作为理解 hazard 处理的主版本。
 
 ### v8
 
 最终教学收束版。
 
-- 补齐 CSR 与异常返回相关路径。
+- 收束为与当前验证平台高度一致的成熟实现。
+- 强化访存、前递、回写与系统路径之间的协同细节。
 - 作为整套教程的最终回归版本。
 - 适合作为继续扩展、优化和课程实验的起点。
 
@@ -214,7 +217,7 @@ make run TEST=simple CPU_DIR=../v1
 
 ```bash
 cd cdp-tests
-make clean && make CPU_DIR=../v8
+make clean
 CPU_DIR=../v8 python3 run_all_tests.py
 ```
 

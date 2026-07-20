@@ -1,5 +1,8 @@
 `include "para.sv"
 
+// 教学注释: EXU 是执行级，同时承担 ID/EX 级间寄存器的角色。
+// 进入 EXU 的控制位与操作数会先被寄存，再由 ALU 计算得到 `EX_result`，最后继续送往 LSU。
+// `EXU_inst_clr` 对应流水线 flush: 当前级若遇到跳转/分支改道，需要把本拍已经进入 EXU 的无效控制位清零。
 module EXU (
     input clock,
     input reset,
@@ -68,6 +71,7 @@ module EXU (
     logic [31:0] rd_value_reg;
     logic fetch_i_reg;
 
+    // valid_next 描述当前拍是否真的有一条有效指令进入执行级。
     always @(posedge clock) begin
         if(reset)
             valid_next <= 1'b0;
@@ -79,6 +83,7 @@ module EXU (
             valid_next <= 1'b0;
     end
 
+    // 这一组寄存器保存数据面信息，对应 ID/EX 级间寄存器。
     always @(posedge clock) begin
         if(reset)begin
             funct3_reg <= 0;
@@ -107,6 +112,7 @@ module EXU (
         end
     end
 
+    // 这一组寄存器保存控制面信息；flush 时会被清零，避免错误路径继续提交。
     always @(posedge clock) begin
         if(reset)begin
             mem_ren_reg <= 0;
@@ -147,6 +153,7 @@ module EXU (
     assign R_wen_next = R_wen_reg;
     assign mem_wen_next = mem_wen_reg;
     assign mem_ren_next = mem_ren_reg;
+    // 某些分支比较通过对最低位取反来复用 ALU 结果，因此这里统一在输出端做一次修正。
     assign EX_result = alu_res ^{31'd0,inv_flag_reg};
     assign rs2_value_next = rs2_value_reg;
     assign branch_flag_next = branch_flag_reg;

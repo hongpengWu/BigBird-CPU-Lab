@@ -1,5 +1,7 @@
 `include "para.sv"
 
+// 执行级把译码得到的操作数和控制信号锁存下来，输出算术结果与分支判定结果。
+// 对分支而言，ALU 的最低位就是条件真假；对跳转/CSR 而言，重点是把结果继续送往最终收束点。
 module EXU (
     input clock,
     input reset,
@@ -73,6 +75,8 @@ module EXU (
     logic fetch_i_reg;
 
 
+    // valid_next 体现执行级是否向后级真正送出一条有效指令；
+    // 若收到 EXU_inst_clr，则说明该条指令因重定向/停顿需要被清空。
     always_ff @(posedge clock) begin
         if(reset)
             valid_next <= 1'b0;
@@ -112,6 +116,7 @@ module EXU (
         end
     end
 
+// 这组控制寄存器与数据寄存器分开写，便于清楚观察“数据本身”和“是否允许副作用”两类信息。
 always_ff @(posedge clock) begin
     if(reset)begin
         mem_ren_reg     <= 0;
@@ -154,6 +159,8 @@ end
     assign R_wen_next                  = R_wen_reg;
     assign mem_wen_next                = mem_wen_reg;
     assign mem_ren_next                = mem_ren_reg;
+    // 对分支比较类指令，inv_flag_reg 用来统一处理取反条件，
+    // 这样 Control 只需读取 EX_result[0] 就能判断是否跳转。
     assign EX_result                   = {alu_res[31:1], alu_res[0] ^ inv_flag_reg};
     assign rs2_value_next              = rs2_value_reg;
     assign branch_flag_next            = branch_flag_reg;
@@ -163,6 +170,7 @@ end
 
 
 /* verilator lint_off PINMISSING */
+// ALU 是执行级核心算子，既负责普通算术逻辑，也负责分支比较。
 ALU #(
     .BW(32) 
 ) ALU_i0 (

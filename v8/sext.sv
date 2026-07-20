@@ -1,3 +1,4 @@
+// 通用符号扩展模块，负责把 load/立即数等较窄数据扩成目标位宽。
 module sext#
 (
     parameter DATA_WIDTH=1,

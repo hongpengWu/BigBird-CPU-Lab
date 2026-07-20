@@ -1,4 +1,5 @@
-// 触发器模板
+// 通用可写寄存器模板。
+// 在本工程里既可作为普通流水寄存器，也可作为 CSR 存储单元。
 module Reg #(WIDTH = 1, RESET_VAL = 0) (
     input               clock,
     input               reset,

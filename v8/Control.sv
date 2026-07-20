@@ -1,3 +1,7 @@
+// Control 负责三件事：
+// 1. 收束所有会改写 PC 的事件，生成 dnpc/dnpc_flag。
+// 2. 识别 load-use 冒险，决定是否暂停 IFU/IDU 并清空执行级。
+// 3. 根据 Data_hazard 的编码真正完成前递值选择。
 module Control (
     input clock,
     input reset,
@@ -54,6 +58,7 @@ module Control (
 
 
     logic branch_taken;
+    // branch_taken 只看 EX_result[0]，因为 EXU 已把各种分支条件归一化到最低位。
     assign branch_taken = branch_flag & Ex_result[0];
     assign dnpc_flag     = branch_taken ? 1'b1 : ((jump_flag | fence_i_flag) | (mret_flag | ecall_flag));
     assign EXU_inst_clear = branch_taken ? 1'b1 : (jump_flag | fence_i_flag | IFU_stall);
@@ -69,10 +74,14 @@ module Control (
     assign icache_clr = fence_i_flag & EXU_valid;
 
 
+    // dnpc 统一承载普通控制流与系统控制流：
+    // jump 用 Ex_result，branch 用 branch_pc，mret 用 mepc，ecall/异常入口用 mtvec。
     assign dnpc = (jump_flag ? Ex_result : branch_flag ? branch_pc : mret_flag ? mepc_out : mtvec_out);
 
 
 
+    // 这里把前递编码翻译成真正的数据值。
+    // 可以把它看成“译码级前面的隐式旁路多路复用器”。
     assign EXU_rs1_in = (IDU_rs1_choice == 3'b001) ? Ex_result :
                         (IDU_rs1_choice == 3'b010) ? MEM_Ex_result :
                         (IDU_rs1_choice == 3'b101) ? MEM_PIPE_Ex_result :
@@ -88,6 +97,7 @@ module Control (
                         IDU_rs2_value;
 
 
+// Data_hazard 只产生选择编码，Control 再结合实际数据源输出最终前递结果。
 Data_hazard Data_hazard_inst (
     .IDU_rs1        (IDU_rs1),
     .IDU_rs2        (IDU_rs2),

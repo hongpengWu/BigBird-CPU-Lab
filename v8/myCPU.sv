@@ -1,6 +1,10 @@
 `include "para.sv"
 
-
+// v8 顶层把 IFU/IDU/EXU/LSU/WBU 串成完整流水线。
+// 观察本文件时可以重点抓三条线：
+// 1. 最终收束：所有会写回寄存器或 CSR 的结果最后统一在 WBU 决定提交值。
+// 2. 访存/前递：LSU 除了真正访存，还额外提供 MEM/MEM_PIPE/MEM2 多级前递观察点。
+// 3. 系统路径：ecall/mret/fence.i 通过 Control 改写下一条 PC，并和普通跳转共用收束逻辑。
 module myCPU (
     input cpu_clk,
     input cpu_rst,
@@ -103,6 +107,10 @@ module myCPU (
   logic        WBU_valid;
   logic        LSU_valid;
 
+  // 顶层统一收集控制面额外信号：
+  // - dnpc/dnpc_flag: 下一条 PC 及其是否需要重定向
+  // - EXU_inst_clear: 执行级指令清空，用于处理跳转/异常/停顿插泡
+  // - IFU_stall: 访存相关 load-use 冒险导致的取指暂停
   /*            PERSONAL              */
 
   logic        dnpc_flag;
@@ -136,6 +144,8 @@ assign debug_wb_value = WBU_rd_value;
   );
 
 
+  // LSU 阶段对外暴露的第一层前递值：
+  // 普通算术/地址类指令前递 EX 结果，跳转/CSR 指令前递已经准备好的 rd_value。
   logic [31:0] MEM_forward_val;
   assign MEM_forward_val = (LSU_jump_flag | (|LSU_csr_wen)) ? LSU_rd_value : LSU_Ex_result;
   
@@ -161,6 +171,8 @@ assign debug_wb_value = WBU_rd_value;
   logic LSU_valid_pipe;
   logic [31:0] LSU_forward_val_pipe;
 
+  // Control 是整机协同核心：
+  // 它一边决定 dnpc/flush/stall，一边给 IDU 送回最合适的前递操作数。
   Control Control_inst0 (
 
       .clock    (cpu_clk),
@@ -222,6 +234,7 @@ assign debug_wb_value = WBU_rd_value;
 
 
 
+  // IDU 把取回的指令展开为执行所需控制信号，同时接收来自 Control 的前递操作数。
   IDU IDU_Inst0 (
       .clock(cpu_clk),
       .reset(cpu_rst),
@@ -278,6 +291,7 @@ assign debug_wb_value = WBU_rd_value;
 
   );
 
+  // EXU 产生算术结果、分支判定结果和跳转目标；这些结果会反向影响前端是否重定向。
   EXU EXU_Inst0 (
       .clock       (cpu_clk),
       .reset       (cpu_rst),
@@ -327,6 +341,7 @@ assign debug_wb_value = WBU_rd_value;
 
   );
 
+  // LSU 既承担真正的访存，也承担“把可用结果尽早释放给后续级做前递”的任务。
   LSU LSU_Inst0 (
       .clock(cpu_clk),
       .reset(cpu_rst),
@@ -389,6 +404,7 @@ assign debug_wb_value = WBU_rd_value;
 
   );
 
+  // WBU 是最终收束点：无论结果来自 ALU、访存还是跳转/CSR，这里统一形成最终写回值。
   WBU WBU_inst0 (
       .clock(cpu_clk),
       .reset(cpu_rst),

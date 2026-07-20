@@ -8,20 +8,42 @@ SIM_OPTS = --trace -Wno-lint -Wno-style -Wno-TIMESCALEMOD
 TEST = addi
 TESTFILE = meminit.bin
 PWD = $(shell pwd)
+SIM = obj_dir/VminiRV_SoC
+RUN_LOG = .run.log
 
-build: $(VSRC) $(CSRC)
+all: build
+
+$(SIM): $(VSRC) $(CSRC)
 	@verilator -cc --exe --build $(VSRC) --top-module miniRV_SoC $(CSRC) $(SIM_OPTS) +define+PATH=$(TESTFILE) -CFLAGS -DPATH=$(TESTFILE) -I$(CPU_DIR) -I$(SOC_DIR) -CFLAGS -I$(PWD)/golden_model/include
 	@mkdir -p waveform
-run: build
+
+build: $(SIM)
+
+run: $(SIM)
 	@ln -sf bin/$(TEST).bin $(TESTFILE)
-	@./obj_dir/VminiRV_SoC $(TEST)
-run_for_python:  # should run "make all" first, for python-based test
+	@./obj_dir/VminiRV_SoC $(TEST) > $(RUN_LOG) 2>&1; \
+	status=$$?; \
+	cat $(RUN_LOG); \
+	if [ $$status -ne 0 ] || grep -q "Timed out!" $(RUN_LOG); then \
+		rm -f $(RUN_LOG) $(TESTFILE); \
+		exit 1; \
+	fi; \
+	rm -f $(RUN_LOG) $(TESTFILE)
+
+run_for_python: $(SIM)
 	@ln -sf bin/$(TEST).bin $(TESTFILE)
-	@./obj_dir/VminiRV_SoC $(TEST)
-	@rm -rf $(TESTFILE)
+	@./obj_dir/VminiRV_SoC $(TEST) > $(RUN_LOG) 2>&1; \
+	status=$$?; \
+	cat $(RUN_LOG); \
+	if [ $$status -ne 0 ] || grep -q "Timed out!" $(RUN_LOG); then \
+		rm -f $(RUN_LOG) $(TESTFILE); \
+		exit 1; \
+	fi; \
+	rm -f $(RUN_LOG) $(TESTFILE)
+
 $(TESTFILE):
 	ln -sf bin/$(TEST).bin $(TESTFILE)
 clean:
-	rm -rf obj_dir waveform $(TESTFILE)
+	rm -rf obj_dir waveform $(TESTFILE) $(RUN_LOG)
 
-.PHONY: run debug clean
+.PHONY: all build run run_for_python clean

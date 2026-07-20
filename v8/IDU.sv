@@ -1,5 +1,9 @@
 `include "para.sv"
 
+// 译码级负责把原始指令翻译成三类信息：
+// 1. 数据通路控制：ALU 操作数、写回使能、访存读写。
+// 2. 控制通路信息：branch/jump/ecall/mret/fence.i 等重定向事件。
+// 3. 系统路径入口：CSR 地址与 CSR 写使能，用于把异常/返回并入统一控制流。
 module IDU(
     input clock,
     input reset,
@@ -72,6 +76,7 @@ module IDU(
     assign ready_last = ready_next && !stall;
     assign valid_next = valid_d;
 
+    // 第一级流水寄存：从 IFU 接住原始指令。flush 时主动灌入 NOP。
     always_ff @(posedge clock) begin
         if (reset || flush) begin
             inst  <= 32'h00000013;
@@ -86,6 +91,7 @@ module IDU(
         end
     end
 
+    // 第二级译码寄存：把译码看到的 inst/snps/pc 再稳定一个拍，便于后续组合译码和前递选择。
     always_ff @(posedge clock) begin
         if (reset || flush) begin
             inst_d  <= 32'h00000013;
@@ -120,6 +126,7 @@ module IDU(
     assign funct3                      = inst_d[14:12];
     assign rd_next                     = inst_d[11:7];
 
+    // 三条特殊系统路径都在译码级尽早识别，后续统一交给 Control 决定是否重定向 PC。
     assign ecall_flag                  = (inst_d == 32'b00000000000000000000000001110011);
     assign mret_flag                   = (inst_d == 32'b00110000001000000000000001110011);
     assign fence_i_flag                = (inst_d == 32'b00000000000000000001000000001111);
@@ -161,6 +168,8 @@ module IDU(
  
     assign csr_addr                    = imm;
 
+    // rd_value_next 代表“无需再经过 ALU/访存加工即可写回”的结果：
+    // 跳转类返回 snpc，CSR 指令直接返回读出的旧 CSR 值。
     assign rd_value_next               = jump_flag ? snpc_d :
                                          (|csr_wen_next) ? csrs :
                                          0;
@@ -170,6 +179,7 @@ module IDU(
     logic [31:0] add_src1;
     logic [31:0] add_src2;
 
+    // add_src1/add_src2 把不同指令族统一映射为 ALU 双输入，便于执行级只关心运算而不再关心指令格式。
     assign add_src1 = is_U0 ? 32'd0 :
                       (is_J || is_U1) ? pc_d :
                       EXU_rs1_in;
@@ -219,6 +229,7 @@ module IDU(
     assign cond_sub = (is_R  && funct3 == 3'b000 && oprand[5] == 1'b1);
     assign cond_equal = (is_B && funct3[2:1] == 2'b00);
 
+    // 分支比较与普通算术共用同一套 ALU 编码，后续由 EXU 取最低位作为条件判定结果。
     assign alu_opcode = cond_add ? `alu_add :
                         cond_signed_cmp ? `alu_signed_comparator :
                         cond_unsigned_cmp ? `alu_unsigned_comparator :
@@ -248,6 +259,7 @@ module IDU(
                  (opcode == `S_opcode)? imm_R :
                   0;
 
+// Reg_Stack 把通用寄存器堆和 CSR 空间并排组织，译码级在这里同时拿到整数寄存器值与系统寄存器值。
 Reg_Stack Reg_Stack_inst0(
     .reset (reset),
     .clock (clock),

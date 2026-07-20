@@ -1,3 +1,5 @@
+// Reg_Stack 把整数寄存器堆与 CSR 空间封装在一起。
+// 对译码级来说，它相当于系统路径和普通数据路径的共同读入口。
 module Reg_Stack(
     input reset,
     input clock,
@@ -31,8 +33,10 @@ module Reg_Stack(
     logic [31:0] marchid_out;
 
 
+    // x0 永远保持 0，因此即便上层误传 rd=0，也会被这里钳成 0。
     assign wdata = (rd == 4'd0) ? 32'd0 : rd_value;
 
+    // 读 CSR 时通过地址多路选择把不同系统寄存器并到统一返回口 csrs。
     assign csrs = (csr_addr == 32'h341) ? mepc_out       :
                   (csr_addr == 32'h342) ? mcause_out     :
                   (csr_addr == 32'h300) ? mstatus_out    :
@@ -42,6 +46,7 @@ module Reg_Stack(
 
 
 
+// CSR 子块维护异常/返回相关机器态。
 CSR #(32,0) CSR_inst(
     .clock(clock),
     .reset(reset),
@@ -63,6 +68,7 @@ CSR #(32,0) CSR_inst(
 
 );
 
+// RegisterFile 子块维护通用整数寄存器。
 RegisterFile #(5, 32) Reg_inst(
     .clock(clock),
     .wdata(wdata),

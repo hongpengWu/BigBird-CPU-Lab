@@ -13,6 +13,8 @@
 - CSR 与异常返回相关通路
 - 与当前仿真平台高度一致的实现细节
 
+这里需要强调：`v8` 并不是“第一次出现 CSR”的版本。系统指令与 CSR 主路径在 `v6`、`v7` 中已经存在；`v8` 的意义在于把这些路径与访存、前递、回写等细节进一步收束为一套更成熟、更适合完整回归验证的实现。
+
 ## Design Focus
 
 `v8` 的主要用途包括：
@@ -37,7 +39,7 @@ make run TEST=jalr CPU_DIR=../v8
 
 ```bash
 cd ../cdp-tests
-make clean && make CPU_DIR=../v8
+make clean
 CPU_DIR=../v8 python3 run_all_tests.py
 ```
 

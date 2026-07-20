@@ -1,5 +1,7 @@
 `include "para.sv"
 
+// 教学说明：v5 在 v4 访存路径稳定后，继续补上 jalr 这类更完整的控制流跳转。
+// 这说明同一套 ALU 不仅能做算术和地址计算，还能承担“下一条 PC 该去哪里”的求值任务。
 module myCPU (
     input cpu_clk,
     input cpu_rst,
@@ -25,6 +27,8 @@ module myCPU (
   // ==================== IF: Program Counter ====================
   logic [31:0] pc;
 
+  // 教学说明：取指后先把指令拆成 opcode / funct / 寄存器编号 / 立即数。
+  // 后面的所有控制选择，本质上都围绕这些字段展开。
   // ==================== IF/ID: Instruction Fields ==============
   wire [31:0] inst = irom_data;
   wire [31:0] snpc = pc + 32'd4;
@@ -42,9 +46,12 @@ module myCPU (
   wire [31:0] imm_u = {inst[31:12], 12'b0};
   wire [31:0] imm_j = {{11{inst[31]}}, inst[31], inst[19:12], inst[20], inst[30:21], 1'b0};
 
+  // 译码阶段把“指令长什么样”转换成“数据通路该怎么走”。
+  // 对比 v3/v4/v5 这里哪些布尔量被打开，能最快看出版本能力的递进。
   // ==================== ID: Decode Result ======================
   wire is_load   = (opcode == `I0_opcode);
   wire is_op_imm = (opcode == `I1_opcode);
+  // v5 新增 jalr，意味着跳转目标可以来自“寄存器 + 立即数”的间接形式。
   wire is_jalr   = (opcode == `I2_opcode);
   wire is_store  = (opcode == `S_opcode);
   wire is_branch = (opcode == `B_opcode);
@@ -75,6 +82,8 @@ module myCPU (
   logic [31:0] rd_value_next;
   logic        branch_taken;
 
+  // 访存路径沿用 v4：先由 ALU 给出地址，再对读回的数据做必要扩展。
+  // 新增的控制流能力与访存路径并行存在，便于对比“数据去寄存器”和“PC 去新地址”两类结果。
   // ==================== MEM: Load Extension ====================
   wire [31:0] load_i8;
   wire [31:0] load_i16;
@@ -120,6 +129,8 @@ module myCPU (
       .res(alu_res)
   );
 
+  // 分支判断使用寄存器读出的两个源操作数，决定控制流是否偏离顺序执行。
+  // 这是从纯算术走向“会转弯的 CPU”的第一步。
   // ==================== EX: Branch Decision ====================
   always_comb begin
     branch_taken = 1'b0;
@@ -134,6 +145,8 @@ module myCPU (
     endcase
   end
 
+  // 这一段是教学重点：同一个 ALU，根据不同指令切换输入源和操作类型。
+  // 算术指令在这里选寄存器/立即数，访存指令在这里算地址，跳转指令也在这里准备目标。
   // ==================== EX: ALU Input Select ===================
   always_comb begin
     alu_in1 = rs1_value;
@@ -205,6 +218,9 @@ module myCPU (
     end
   end
 
+  // 这一段把三类结果统一收口：
+  // 1) ALU 结果写回；2) 访存结果写回；3) jal/jalr/branch 产生新的 PC。
+  // 这样能直观看到 v5 如何把算术、访存和控制流并入同一个提交点。
   // ==================== MEM/WB: Commit Select ==================
   always_comb begin
     perip_addr = 32'd0;
@@ -263,6 +279,8 @@ module myCPU (
   assign rf_wdata = rd_value_next;
   assign irom_addr = pc;
 
+  // 时钟到来后提交当前指令的最终可见结果，并把调试端口同步出去。
+  // 从教学角度看，这里可以视为“本条指令正式生效”的时刻。
   // ==================== WB: Architectural Commit ===============
   always_ff @(posedge cpu_clk) begin
     if (cpu_rst) begin

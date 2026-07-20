@@ -1,6 +1,8 @@
 `include "para.sv"
 `timescale 1ns / 1ps
 
+// 教学注释: ALU 负责执行算术、逻辑、比较和移位等操作，是 EXU 的核心组合逻辑。
+// 与 v5 相比，ALU 本体功能变化不大，真正的变化在于它现在被放进流水线执行级，并受前后级控制信号驱动。
 module ALU #(
     parameter BW = 32
 )
@@ -19,6 +21,7 @@ module ALU #(
     assign d2_inv = ~d2;
     assign d1_inv = ~d1;
 
+// choice 来自 IDU 译码后的 ALU 操作码，EXU 只需把操作数与操作类型送进来。
 always@(*)
     begin
     res = 0;
@@ -94,6 +97,7 @@ always@(*)
     
 end
 
+// add 子模块统一承担加/减法底层实现，比较类操作也会间接复用它的结果。
 add
 #(
     .BW(BW)

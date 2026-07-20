@@ -1,5 +1,11 @@
 
+// v2 继续沿用这份公共参数表。
+// 它相当于控制通路与执行通路之间的“约定接口”:
+// 上层译码产生 opcode 分类和 alu_choice，
+// 下层组合逻辑据此决定走哪条数据通路。
+
 // __opcode__
+// 各类 RISC-V 指令主 opcode 编码。
 
 `define R_opcode  7'b0110011
 `define I0_opcode 7'b0000011
@@ -13,6 +19,7 @@
 `define M_opcode  7'b1110011
 
 // alu
+// ALU 功能选择编码。v2 新增独立 ALU 模块后，这些定义开始真正承担模块间接口语义。
 `define alu_add                   4'b0000
 `define alu_sub                   4'b0001
 `define alu_or                    4'b0010

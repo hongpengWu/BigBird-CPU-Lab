@@ -1,5 +1,9 @@
 `include "para.sv"
 
+// 教学注释: v6 是相对 v5 的第一次模块化流水线实现。
+// 这里把原先集中写在一个文件里的取指/译码/执行/访存/回写拆成 IFU/IDU/EXU/LSU/WBU 五段。
+// 观察信号命名时可把 `IFU_* -> IDU_* -> EXU_* -> LSU_* -> WBU_*` 看成级间流动的数据与控制信息。
+// 本版已经引入 dnpc/flush/CSR 接口，但 hazard 处理仍较简化，主要为 v7 的真实前递与停顿机制预留接口。
 module myCPU (
     input cpu_clk,
     input cpu_rst,
@@ -104,12 +108,14 @@ module myCPU (
 
   /*            PERSONAL              */
 
-  wire        dnpc_flag;
-  wire        EXU_inst_clear;
-  wire [31:0] dnpc;
-  wire IFU_stall;
-  wire icache_clr;
+  // 下面这组信号都是跨级控制反馈: 由后级事件反向影响前级取指。
+  wire        dnpc_flag;      // 是否发生 PC 重定向
+  wire        EXU_inst_clear; // 是否清空已进入 EXU 的错误路径指令
+  wire [31:0] dnpc;           // 重定向后的下一条 PC
+  wire IFU_stall;             // hazard 导致的取指停顿
+  wire icache_clr;            // fence.i 触发的取指侧清空请求
 
+  // 取指地址始终来自 IFU 当前持有的 PC。
   assign irom_addr = IFU_pc;
 
 assign debug_wb_have_inst = WBU_valid;
@@ -119,6 +125,7 @@ assign debug_wb_reg = WBU_rd;
 assign debug_wb_value = WBU_rd_value;
 
 
+  // IFU 输出 `pc/snpc/inst`，相当于 IF/ID 边界前的取指结果。
   IFU IFU_Inst0 (
       .clock    (cpu_clk),
       .reset    (cpu_rst),
@@ -135,6 +142,7 @@ assign debug_wb_value = WBU_rd_value;
   );
 
 
+  // Control 汇总 EX/ID/MEM 的反馈，决定前递、停顿、flush 与异常跳转。
   Control Control_inst0 (
 
       .clock    (cpu_clk),
@@ -182,6 +190,7 @@ assign debug_wb_value = WBU_rd_value;
 
 
 
+  // IDU 从寄存器堆/CSR 取数并生成进入执行级的控制位。
   IDU IDU_Inst0 (
       .clock(cpu_clk),
       .reset(cpu_rst),
@@ -235,6 +244,7 @@ assign debug_wb_value = WBU_rd_value;
 
   );
 
+  // EXU 既执行 ALU，也承担 ID->EX 级间寄存器的锁存工作。
   EXU EXU_Inst0 (
       .clock       (cpu_clk),
       .reset       (cpu_rst),
@@ -284,6 +294,7 @@ assign debug_wb_value = WBU_rd_value;
 
   );
 
+  // LSU 负责访存与 load 扩展，同时把信息继续推到回写级。
   LSU LSU_Inst0 (
       .clock(cpu_clk),
       .reset(cpu_rst),
@@ -324,6 +335,7 @@ assign debug_wb_value = WBU_rd_value;
 
   );
 
+  // WBU 是体系结构可见的提交点，debug 接口也从这里取值。
   WBU WBU_inst0 (
       .clock(cpu_clk),
       .reset(cpu_rst),

@@ -1,6 +1,8 @@
 `include "para.sv"
 `timescale 1ns / 1ps
 
+// ALU 统一承接算术、逻辑、移位和比较。
+// 这里的比较结果约定放在 res[0]，方便分支控制直接读取最低位。
 module ALU #(
     parameter BW = 32
 ) (
@@ -17,6 +19,7 @@ module ALU #(
     assign d2_inv = ~d2;
     assign d1_inv = ~d1;
 
+    // 组合逻辑里只做功能选择；真正的加/减法被折叠到下面的 add 模块复用。
     always_comb begin
         res = '0;
         unique case (choice)
@@ -73,6 +76,7 @@ module ALU #(
         endcase
     end
 
+    // 通过 choose_add_sub 复用一套加法器，实现 add/sub/部分比较所需的差值计算。
     add #(
         .BW (BW)
     ) add_inst0 (

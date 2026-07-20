@@ -1,5 +1,8 @@
 `include "para.sv"
 
+// 教学注释: IDU 负责把指令拆成控制信号，并生成送往 EXU 的操作数、目的寄存器与 CSR 写使能。
+// 这里还能看到 CSR 读路径: 指令里的 csr 地址先形成 `csr_addr`，再到 Reg_Stack/CSR 读出 `csrs`。
+// 与 v5 相比，译码结果不再直接驱动最终写回，而是作为级间信息继续向后传递。
 module IDU(
     input clock,
     input reset,
@@ -68,6 +71,7 @@ module IDU(
     logic [31:0] csrs;
     logic [31:0] imm;
 
+    // 这里暂未单独缓存 IF/ID 级间寄存器，所以 ready/valid 直接向前后透传。
     assign ready_last = ready_next;
     assign valid_next = valid_last;
 
@@ -78,10 +82,12 @@ module IDU(
     assign funct3 = inst[14:12];
     assign rd_next = inst[11:7];
 
+    // system 指令在这里先被识别成异常/返回/取指栅栏事件，后续由 Control 统一处理。
     assign ecall_flag = (inst == 32'b00000000000000000000000001110011);//ecall
     assign mret_flag = (inst == 32'b00110000001000000000000001110011);// mret
     assign fence_i_flag = (inst == 32'b00000000000000000001000000001111);
 
+    // `csr_wen_next` 用 one-hot 形式标出将要写哪个 CSR，便于后续在 Reg_Stack/CSR 中落地。
     assign csr_wen_next[0] = (opcode == `M_opcode && imm == 32'h341);
     assign csr_wen_next[1] = (opcode == `M_opcode && imm == 32'h342);
     assign csr_wen_next[2] = (opcode == `M_opcode && imm == 32'h300);
@@ -98,12 +104,14 @@ module IDU(
  
     assign csr_addr = imm;
 
+    // jal/jalr/CSR 指令会提前准备“未来写回值”，普通 ALU/访存结果则交给后级生成。
     assign rd_value_next = jump_flag? snpc: 
                           (|csr_wen_next)? csrs:
                           0;
     assign branch_pc = pc + imm;
     assign pc_out = pc;
 
+    // `add1/add2` 是送往 ALU 的两个操作数；在 v7 中它们还可能已经过前递修正。
     assign add1_value = (opcode == `U0_opcode)? 0 :
                         (opcode == `J_opcode || opcode == `U1_opcode )? pc :
                         EXU_rs1_in;
@@ -160,6 +168,7 @@ module IDU(
                  (opcode == `S_opcode)? imm_R :
                   0;
 
+// Reg_Stack 把 GPR 读写与 CSR 读写封装在一起，形成译码级看到的架构状态。
 Reg_Stack Reg_Stack_inst0(
     .reset(reset),
     .clock(clock),

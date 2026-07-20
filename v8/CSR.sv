@@ -1,3 +1,5 @@
+// CSR 子模块承接系统路径状态。
+// ecall 会把当前 PC 写入 mepc，并把 mcause 置为 11；mret 则在上层经由 mepc 回到被打断位置。
 module CSR #(
     parameter CSR_WIDTH = 32,
     parameter RESET_VAL = 0
@@ -23,6 +25,7 @@ module CSR #(
     logic               [  31: 0]        mstatus_in                  ;
     logic               [  31: 0]        mtvec_in                    ;
 
+    // 普通 CSR 写使用 csrd，ecall 则强制覆盖为异常上下文。
     assign mepc_in = (ecall_flag) ? pc : csrd;
     assign mcause_in = (ecall_flag) ? 11 : csrd;
     assign mstatus_in = csrd;
@@ -41,6 +44,7 @@ Reg #(
     .wen (csr_wen[0] | ecall_flag)
 );
 
+// 四个关键机器级 CSR 都用同一个通用寄存器模板实现。
 Reg #(
     .WIDTH (CSR_WIDTH),
     .RESET_VAL (RESET_VAL)

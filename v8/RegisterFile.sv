@@ -1,4 +1,6 @@
 `include "para.sv"
+// 通用整数寄存器堆：两个读口、一个写口。
+// 这里保持最朴素的实现，便于教学时把注意力放在流水协同而不是寄存器堆优化上。
 module RegisterFile #(ADDR_WIDTH = 32, DATA_WIDTH = 5) (
     input                          clock,
     input      [DATA_WIDTH-1:0]    wdata,
@@ -14,6 +16,7 @@ module RegisterFile #(ADDR_WIDTH = 32, DATA_WIDTH = 5) (
 );
     logic [DATA_WIDTH-1:0] rf [2**ADDR_WIDTH-1:0];
 
+    // 写回在时钟上升沿生效，读口保持组合直读。
     always_ff @(posedge clock) begin
         if (wen) rf[waddr] <= wdata;
     end
